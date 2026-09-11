@@ -1,0 +1,48 @@
+services:
+  app:
+    build: .
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # Воркер очереди: выгрузка отзывов идёт в фоне, внутри HTTP-запроса ей делать нечего.
+  queue:
+    build: .
+    command: php artisan queue:work --tries=3
+    volumes:
+      - .:/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: yamaps
+      MYSQL_USER: yamaps
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      interval: 5s
+      retries: 20
+
+  # Сборка фронта. Поднимается по требованию: docker compose run --rm node npm run build
+  node:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - .:/app
+    profiles: ["tools"]
+
+volumes:
+  mysql:
