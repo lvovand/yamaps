@@ -66,15 +66,20 @@ class CheckOrganizationCard implements ShouldBeUnique, ShouldQueue
             'reviews_count' => $data->reviewsCount,
         ]);
 
-        if (($data->reviewsCount ?? 0) > config('parsing.slice_limit')) {
+        // Карточку уже выгружали — значит режим выбран раньше, и спрашивать заново незачем.
+        // Иначе повторное добавление той же ссылки сбрасывало бы готовую организацию в вопрос.
+        $answered = $this->organization->parsed_at !== null;
+
+        if (! $answered && ($data->reviewsCount ?? 0) > config('parsing.slice_limit')) {
             $this->organization->update(['status' => ParseStatus::AwaitingChoice]);
 
             return;
         }
 
-        // Отзывов немного — выгрузка одним срезом заберёт их все, спрашивать не о чем.
         $this->organization->update([
-            'fetch_mode' => FetchMode::Recent,
+            // Отзывов немного — выгрузка одним срезом заберёт их все, спрашивать не о чем.
+            // У организации, которую уже выгружали, режим оставляем прежний.
+            'fetch_mode' => $answered ? $this->organization->fetch_mode : FetchMode::Recent,
             'status' => ParseStatus::Pending,
         ]);
 

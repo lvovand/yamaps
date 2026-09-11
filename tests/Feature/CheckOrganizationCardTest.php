@@ -78,6 +78,29 @@ class CheckOrganizationCardTest extends TestCase
         Queue::assertPushed(ParseOrganizationReviews::class);
     }
 
+    public function test_уже_выгруженную_карточку_не_переспрашивает(): void
+    {
+        Http::fake(['*' => Http::response($this->cardHtml(reviewCount: 1565))]);
+
+        $organization = $this->organization();
+        // Режим выбирали раньше, выгрузка уже была — повторная проверка не должна
+        // возвращать готовую организацию к вопросу.
+        $organization->update([
+            'fetch_mode' => FetchMode::Maximum,
+            'status' => ParseStatus::Ready,
+            'parsed_at' => now(),
+        ]);
+
+        (new CheckOrganizationCard($organization))->handle();
+
+        $organization->refresh();
+
+        $this->assertSame(ParseStatus::Pending, $organization->status);
+        $this->assertSame(FetchMode::Maximum, $organization->fetch_mode);
+
+        Queue::assertPushed(ParseOrganizationReviews::class);
+    }
+
     public function test_проверка_делает_ровно_один_запрос(): void
     {
         Http::fake(['*' => Http::response($this->cardHtml(reviewCount: 1565))]);
